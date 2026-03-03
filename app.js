@@ -429,11 +429,14 @@ let calMonth = new Date().getMonth();
 let calSelectedDate = null; // 'YYYY-MM-DD'
 
 function renderChart() {
-  renderCalendar();
-  // 今日を自動選択
+  // 今日を自動選択（初回のみ）
   const today = new Date();
   const key = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
-  selectCalDay(key);
+  calSelectedDate = key;
+  calYear = today.getFullYear();
+  calMonth = today.getMonth();
+  renderCalendar();
+  renderDayDetail(key);
 }
 
 function calPrevMonth() {
@@ -464,7 +467,8 @@ function renderCalendar() {
     if (h.result === 'correct') dayStats[key].correct++;
   });
 
-  const maxDay = Math.max(...Object.values(dayStats).map(d => d.total), 1);
+  const allTotals = Object.values(dayStats).map(d => d.total);
+  const maxDay = allTotals.length > 0 ? Math.max(...allTotals) : 1;
 
   const firstDay = new Date(calYear, calMonth, 1).getDay();
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
@@ -479,7 +483,7 @@ function renderCalendar() {
   // 空白セル
   for (let i = 0; i < firstDay; i++) {
     const blank = document.createElement('div');
-    blank.style.cssText = 'height:48px';
+    blank.style.cssText = 'aspect-ratio:1;min-height:36px';
     grid.appendChild(blank);
   }
 
@@ -493,7 +497,7 @@ function renderCalendar() {
 
     const cell = document.createElement('div');
     cell.style.cssText = [
-      'height:48px',
+      'aspect-ratio:1','min-height:36px',
       'display:flex',
       'flex-direction:column',
       'align-items:center',
@@ -541,7 +545,6 @@ function renderCalendar() {
 
 function selectCalDay(key) {
   calSelectedDate = key;
-  // 選択月がずれていたらカレンダーを更新
   const [y, m] = key.split('-').map(Number);
   if (y !== calYear || m - 1 !== calMonth) {
     calYear = y; calMonth = m - 1;
