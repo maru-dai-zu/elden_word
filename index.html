@@ -26,6 +26,7 @@
 <nav class="nav">
   <button class="nav-btn active" onclick="showPage('quiz')" id="tab-quiz">⚔ 試練 <span class="nav-badge" id="due-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showPage('history')" id="tab-history">📜 履歴</button>
+  <button class="nav-btn" onclick="showPage('chart')" id="tab-chart">📊 本日の記録</button>
 </nav>
 
 <div class="stats-bar">
@@ -127,6 +128,58 @@
 </div>
 
 <div style="position:fixed;bottom:14px;right:14px;font-family:'Cinzel',serif;font-size:7px;letter-spacing:2px;color:rgba(74,69,64,.4);z-index:10">[ 1-4 ] 選択 · [ Space ] 答え確認 · [ Enter ] 次へ</div>
+
+<!-- ═══ CHART PAGE ═══ -->
+<div class="page" id="page-chart">
+<div class="container">
+  <div class="card card-sm" style="margin-bottom:14px">
+    <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:3px;color:var(--gold);text-transform:uppercase;margin-bottom:4px">本日の学習記録</div>
+    <div style="font-size:11px;color:var(--fog)" id="chart-summary">—</div>
+  </div>
+
+  <!-- 時間帯別グラフ -->
+  <div class="card" style="margin-bottom:14px">
+    <div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;color:var(--gold);margin-bottom:18px;text-transform:uppercase">── 時間帯別 単語数 ──</div>
+    <div id="hourly-chart" style="position:relative;height:180px;display:flex;align-items:flex-end;gap:3px;padding:0 0 24px 36px"></div>
+    <div id="chart-empty" style="display:none;text-align:center;padding:40px 0;color:var(--fog);font-family:'Cinzel',serif;font-size:10px;letter-spacing:3px">── 本日の記録なし ──</div>
+  </div>
+
+  <!-- 正解 / 不正解 ドーナツ -->
+  <div class="card" style="display:flex;align-items:center;gap:28px;flex-wrap:wrap">
+    <div style="position:relative;flex-shrink:0">
+      <svg width="120" height="120" viewBox="0 0 120 120">
+        <circle id="donut-bg" cx="60" cy="60" r="46" fill="none" stroke="rgba(201,168,76,.08)" stroke-width="18"/>
+        <circle id="donut-correct" cx="60" cy="60" r="46" fill="none" stroke="var(--gold)" stroke-width="18"
+          stroke-dasharray="289.03" stroke-dashoffset="289.03"
+          stroke-linecap="butt" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset .8s ease"/>
+        <circle id="donut-wrong" cx="60" cy="60" r="46" fill="none" stroke="var(--blood)" stroke-width="18"
+          stroke-dasharray="289.03" stroke-dashoffset="289.03"
+          stroke-linecap="butt" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset .8s ease"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <div id="donut-pct" style="font-family:'Cinzel',serif;font-size:18px;color:var(--gold)">—</div>
+        <div style="font-family:'Cinzel',serif;font-size:7px;color:var(--fog);letter-spacing:2px">正答率</div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:120px">
+      <div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;color:var(--gold);margin-bottom:12px;text-transform:uppercase">── 本日の結果 ──</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:10px;height:10px;background:var(--gold);flex-shrink:0"></div>
+          <span style="font-size:12px;color:var(--parchment)">正解 <span id="today-correct" style="color:var(--gold);font-weight:700">0</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:10px;height:10px;background:var(--blood);flex-shrink:0"></div>
+          <span style="font-size:12px;color:var(--parchment)">不正解 <span id="today-wrong" style="color:#e07070;font-weight:700">0</span></span>
+        </div>
+        <div style="border-top:1px solid rgba(201,168,76,.12);padding-top:8px;margin-top:2px">
+          <span style="font-size:11px;color:var(--fog)">合計 <span id="today-total" style="color:var(--parchment);font-weight:700">0</span> 問</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
 
 <script src="vocab.js"></script>
 <script src="app.js"></script>
