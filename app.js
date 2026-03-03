@@ -2,22 +2,22 @@
 // STORAGE
 // ════════════════════════════════════════════════
 const Storage = {
-  async getHistory() {
-    try { const r = await window.storage.get('quiz-history'); return r ? JSON.parse(r.value) : []; } catch { return []; }
+  getHistory() {
+    try { return JSON.parse(localStorage.getItem('quiz-history') || '[]'); } catch { return []; }
   },
-  async addHistory(entry) {
+  addHistory(entry) {
     try {
-      let h = await Storage.getHistory();
+      let h = this.getHistory();
       h.unshift(entry);
       if (h.length > 2000) h = h.slice(0, 2000);
-      await window.storage.set('quiz-history', JSON.stringify(h));
+      localStorage.setItem('quiz-history', JSON.stringify(h));
     } catch {}
   },
-  async getStats() {
-    try { const r = await window.storage.get('global-stats'); return r ? JSON.parse(r.value) : { correct: 0, wrong: 0, streak: 0, maxStreak: 0, total: 0 }; } catch { return { correct: 0, wrong: 0, streak: 0, maxStreak: 0, total: 0 }; }
+  getStats() {
+    try { return JSON.parse(localStorage.getItem('global-stats') || 'null') || { correct: 0, wrong: 0, streak: 0, maxStreak: 0, total: 0 }; } catch { return { correct: 0, wrong: 0, streak: 0, maxStreak: 0, total: 0 }; }
   },
-  async setStats(s) {
-    try { await window.storage.set('global-stats', JSON.stringify(s)); } catch {}
+  setStats(s) {
+    try { localStorage.setItem('global-stats', JSON.stringify(s)); } catch {}
   }
 };
 
@@ -152,7 +152,7 @@ function loadQ() {
   updateQProg();
 }
 
-async function answerQ(idx) {
+function answerQ(idx) {
   if (qState.answered) return;
   qState.answered = true;
   gStats.total++;
@@ -182,8 +182,8 @@ async function answerQ(idx) {
   if (gStats.streak >= 3) { sp.style.display = 'inline-flex'; document.getElementById('streak-n').textContent = gStats.streak; }
   else sp.style.display = 'none';
 
-  await Storage.setStats(gStats);
-  await Storage.addHistory({ k: qState.cur.k, r: qState.cur.r, m: qState.cur.m, result: ok ? 'correct' : 'wrong', mode: qState.mode, ts: Date.now(), type: 'quiz' });
+  Storage.setStats(gStats);
+  Storage.addHistory({ k: qState.cur.k, r: qState.cur.r, m: qState.cur.m, result: ok ? 'correct' : 'wrong', mode: qState.mode, ts: Date.now(), type: 'quiz' });
 }
 
 function nextQ() {
@@ -191,7 +191,7 @@ function nextQ() {
   else loadQ();
 }
 
-async function showRoundResults() {
+function showRoundResults() {
   document.getElementById('quiz-card').style.display = 'none';
   document.getElementById('results-card').style.display = 'block';
   const pct = Math.round(qState.rc / qState.rt * 100);
@@ -219,8 +219,8 @@ function updateQProg() {
 // ════════════════════════════════════════════════
 // HISTORY
 // ════════════════════════════════════════════════
-async function renderHistory() {
-  cachedHistory = await Storage.getHistory();
+function renderHistory() {
+  cachedHistory = Storage.getHistory();
   renderHistoryPage();
 }
 
@@ -279,9 +279,9 @@ function renderHistoryPage() {
   }
 }
 
-async function clearHistory() {
+function clearHistory() {
   if (!confirm('履歴を全て削除しますか？')) return;
-  try { await window.storage.delete('quiz-history'); } catch {}
+  try { localStorage.removeItem('quiz-history'); } catch {}
   cachedHistory = [];
   renderHistoryPage();
 }
@@ -300,9 +300,9 @@ document.addEventListener('keydown', e => {
 // ════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════
-async function init() {
+function init() {
   createEmbers();
-  gStats = await Storage.getStats();
+  gStats = Storage.getStats();
   updateGlobalStats();
   qState.queue = shuffle([...vocabulary]);
   loadQ();
