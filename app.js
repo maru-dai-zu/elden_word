@@ -129,6 +129,7 @@ function showPage(id) {
   document.getElementById('page-' + id).classList.add('active');
   document.getElementById('tab-' + id).classList.add('active');
   if (id === 'history') renderHistory();
+  if (id === 'chart') renderChart();
 }
 
 // ════════════════════════════════════════════════
@@ -421,8 +422,133 @@ document.addEventListener('keydown', e => {
 });
 
 // ════════════════════════════════════════════════
-// INIT
+// CHART
 // ════════════════════════════════════════════════
+function renderChart() {
+  const history = Storage.getHistory();
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const todayEnd = todayStart + 86400000;
+
+  const todayHistory = history.filter(h => h.ts >= todayStart && h.ts < todayEnd);
+
+  const correct = todayHistory.filter(h => h.result === 'correct').length;
+  const wrong = todayHistory.filter(h => h.result === 'wrong').length;
+  const total = todayHistory.length;
+
+  document.getElementById('today-correct').textContent = correct;
+  document.getElementById('today-wrong').textContent = wrong;
+  document.getElementById('today-total').textContent = total;
+
+  const dateStr = now.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
+  document.getElementById('chart-summary').textContent = dateStr + ' · ' + total + '問 学習済み';
+
+  // Donut chart
+  const circ = 289.03;
+  if (total > 0) {
+    const pct = Math.round(correct / total * 100);
+    document.getElementById('donut-pct').textContent = pct + '%';
+    const correctArc = (correct / total) * circ;
+    const wrongArc = (wrong / total) * circ;
+    const donutCorrect = document.getElementById('donut-correct');
+    const donutWrong = document.getElementById('donut-wrong');
+    donutCorrect.style.strokeDashoffset = circ - correctArc;
+    donutCorrect.style.strokeDasharray = correctArc + ' ' + (circ - correctArc);
+    donutWrong.style.strokeDashoffset = -(correctArc);
+    donutWrong.style.strokeDasharray = wrongArc + ' ' + (circ - wrongArc);
+  } else {
+    document.getElementById('donut-pct').textContent = '—';
+  }
+
+  // Hourly bar chart
+  const hourly = Array(24).fill(0);
+  todayHistory.forEach(h => {
+    const hour = new Date(h.ts).getHours();
+    hourly[hour]++;
+  });
+
+  const container = document.getElementById('hourly-chart');
+  const emptyEl = document.getElementById('chart-empty');
+  container.innerHTML = '';
+
+  if (total === 0) {
+    container.style.display = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  container.style.display = 'flex';
+  emptyEl.style.display = 'none';
+
+  const maxVal = Math.max(...hourly, 1);
+  const chartH = 156; // px available for bars
+
+  // Y-axis labels
+  const yAxis = document.createElement('div');
+  yAxis.style.cssText = 'position:absolute;left:0;top:0;bottom:24px;width:32px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;padding-right:6px';
+  [maxVal, Math.round(maxVal/2), 0].forEach(v => {
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-family:\'Cinzel\',serif;font-size:7px;color:rgba(74,69,64,.7);line-height:1';
+    lbl.textContent = v;
+    yAxis.appendChild(lbl);
+  });
+  container.appendChild(yAxis);
+
+  // Bars wrapper
+  const barsWrap = document.createElement('div');
+  barsWrap.style.cssText = 'flex:1;display:flex;align-items:flex-end;gap:2px;height:' + (chartH + 24) + 'px;padding-bottom:24px;position:relative';
+
+  // Gridlines
+  [1, 0.5].forEach(frac => {
+    const gl = document.createElement('div');
+    const bottom = frac * chartH + 24;
+    gl.style.cssText = 'position:absolute;left:0;right:0;height:1px;background:rgba(201,168,76,.07);bottom:' + bottom + 'px;pointer-events:none';
+    barsWrap.appendChild(gl);
+  });
+
+  hourly.forEach((count, hour) => {
+    const col = document.createElement('div');
+    col.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;height:100%;position:relative';
+
+    const barH = count > 0 ? Math.max(4, Math.round((count / maxVal) * chartH)) : 0;
+    const bar = document.createElement('div');
+    const isActive = count > 0;
+    bar.style.cssText = [
+      'width:100%',
+      'height:0',
+      'transition:height .6s ease ' + (hour * 20) + 'ms',
+      'background:' + (isActive ? 'linear-gradient(to top,var(--gold-dark),var(--gold))' : 'rgba(201,168,76,.06)'),
+      'border-top:' + (isActive ? '1px solid var(--gold)' : '1px solid rgba(201,168,76,.1)'),
+      'min-height:2px',
+      'position:relative'
+    ].join(';');
+
+    // count tooltip on hover
+    if (count > 0) {
+      bar.title = hour + '時: ' + count + '問';
+      const tip = document.createElement('div');
+      tip.style.cssText = 'position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:rgba(13,11,9,.95);border:1px solid rgba(201,168,76,.3);padding:2px 6px;font-family:\'Cinzel\',serif;font-size:8px;color:var(--gold);white-space:nowrap;opacity:0;transition:opacity .15s;pointer-events:none;z-index:20';
+      tip.textContent = count;
+      bar.appendChild(tip);
+      bar.addEventListener('mouseenter', () => tip.style.opacity = '1');
+      bar.addEventListener('mouseleave', () => tip.style.opacity = '0');
+    }
+
+    const label = document.createElement('div');
+    label.style.cssText = 'position:absolute;bottom:-20px;font-family:\'Cinzel\',serif;font-size:7px;color:' + (count > 0 ? 'rgba(201,168,76,.7)' : 'rgba(74,69,64,.4)') + ';white-space:nowrap';
+    label.textContent = (hour % 3 === 0) ? hour + 'h' : '';
+
+    col.appendChild(bar);
+    col.appendChild(label);
+    barsWrap.appendChild(col);
+
+    // Animate bar height after paint
+    requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.height = barH + 'px'; }));
+  });
+
+  container.appendChild(barsWrap);
+}
+
+
 function init() {
   createEmbers();
   gStats = Storage.getStats();
