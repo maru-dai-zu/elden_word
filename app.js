@@ -212,34 +212,61 @@ function loadQ() {
 
   qState.answered = false;
 
-  const wrongs = shuffle(vocabulary.filter(v => v !== word)).slice(0, 3);
-  const all = shuffle([word, ...wrongs]);
-  qState.opts = all;
-  qState.ci = all.indexOf(word);
-
   const m = qState.mode;
   document.getElementById('q-num').textContent = '# ' + String(gStats.total + 1).padStart(4, '0');
 
-  if (m === 'j2e' || m === 'rd' || qState._dueCard) {
+  if (m === 'rd') {
+    // 読み方モード：入力方式
     document.getElementById('q-word').textContent = word.k;
-    // 読み方モードでは読み方を問題として出すので、問題文に読み方を表示しない
-    document.getElementById('q-read').textContent = (m === 'rd') ? '' : (word.r !== word.k ? word.r : '');
-  } else {
-    document.getElementById('q-word').textContent = word.m;
     document.getElementById('q-read').textContent = '';
-  }
+    const og = document.getElementById('opts-grid');
+    og.innerHTML = '';
 
-  const og = document.getElementById('opts-grid');
-  og.innerHTML = '';
-  all.forEach((opt, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'opt';
-    btn.setAttribute('data-n', ['\u2160', '\u2161', '\u2162', '\u2163'][i]);
-    btn.textContent = (m === 'j2e' || qState._dueCard) ? opt.m :
-      m === 'e2j' ? opt.k + (opt.k !== opt.r ? '\n' + opt.r : '') : opt.r;
-    btn.onclick = () => answerQ(i);
-    og.appendChild(btn);
-  });
+    const wrapper = document.createElement('div');
+    wrapper.className = 'rd-input-wrap';
+    wrapper.innerHTML =
+      '<input type="text" id="rd-input" class="rd-input" placeholder="読み方を入力…" autocomplete="off" autocapitalize="none" spellcheck="false">' +
+      '<button class="rd-submit" id="rd-submit">答える ▶</button>';
+    og.appendChild(wrapper);
+
+    const inp = document.getElementById('rd-input');
+    const sub = document.getElementById('rd-submit');
+    setTimeout(() => inp.focus(), 50);
+
+    const doSubmit = () => {
+      if (qState.answered) return;
+      answerRd(inp.value.trim());
+    };
+    sub.onclick = doSubmit;
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') doSubmit(); });
+
+  } else {
+    // 選択肢モード（j2e / e2j）
+    const wrongs = shuffle(vocabulary.filter(v => v !== word)).slice(0, 3);
+    const all = shuffle([word, ...wrongs]);
+    qState.opts = all;
+    qState.ci = all.indexOf(word);
+
+    if (m === 'j2e' || qState._dueCard) {
+      document.getElementById('q-word').textContent = word.k;
+      document.getElementById('q-read').textContent = word.r !== word.k ? word.r : '';
+    } else {
+      document.getElementById('q-word').textContent = word.m;
+      document.getElementById('q-read').textContent = '';
+    }
+
+    const og = document.getElementById('opts-grid');
+    og.innerHTML = '';
+    all.forEach((opt, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'opt';
+      btn.setAttribute('data-n', ['\u2160', '\u2161', '\u2162', '\u2163'][i]);
+      btn.textContent = (m === 'j2e' || qState._dueCard) ? opt.m :
+        opt.k + (opt.k !== opt.r ? '\n' + opt.r : '');
+      btn.onclick = () => answerQ(i);
+      og.appendChild(btn);
+    });
+  }
 
   document.getElementById('result-panel').classList.remove('visible');
   document.getElementById('srs-rate-area').style.display = 'none';
@@ -276,6 +303,47 @@ function answerQ(idx) {
   showSRSRating();
 
   updateGlobalStats();
+  const sp = document.getElementById('streak-pill');
+  if (gStats.streak >= 3) { sp.style.display = 'inline-flex'; document.getElementById('streak-n').textContent = gStats.streak; }
+  else sp.style.display = 'none';
+
+  Storage.setStats(gStats);
+  Storage.addHistory({ k: qState.cur.k, r: qState.cur.r, m: qState.cur.m, result: ok ? 'correct' : 'wrong', mode: qState.mode, ts: Date.now(), type: 'quiz' });
+}
+
+function answerRd(input) {
+  if (qState.answered) return;
+  qState.answered = true;
+  gStats.total++;
+  qState.rq++;
+
+  const correct = qState.cur.r;
+  const ok = input === correct;
+
+  const inp = document.getElementById('rd-input');
+  const sub = document.getElementById('rd-submit');
+  if (inp) { inp.disabled = true; inp.classList.add(ok ? 'rd-correct' : 'rd-wrong'); }
+  if (sub) sub.disabled = true;
+
+  if (ok) { gStats.correct++; gStats.streak++; qState.rc++; }
+  else { gStats.wrong++; gStats.streak = 0; }
+  if (gStats.streak > gStats.maxStreak) gStats.maxStreak = gStats.streak;
+
+  const j = document.getElementById('judgment');
+  const ok_msgs = ['RUNE OBTAINED', 'GRACE FOUND', '\u77e5\u8b58\u3092\u5f97\u305f', 'KNOWLEDGE GAINED', 'ERDTREE BLESSES'];
+  const ng_msgs = ['YOU DIED', '\u8a9e\u5f59\u306a\u304d\u8005', 'GRACE LOST', 'FELLED', 'MAIDENLESS'];
+  j.textContent = ok ? ok_msgs[Math.floor(Math.random() * ok_msgs.length)] : ng_msgs[Math.floor(Math.random() * ng_msgs.length)];
+  j.className = 'judgment ' + (ok ? 'cj' : 'wj');
+
+  const loreText = ok
+    ? qState.cur.k + ' \u2014 ' + qState.cur.m
+    : qState.cur.k + ' \u2014 \u6b63\u89e3: ' + correct + ' \u2014 ' + qState.cur.m;
+  document.getElementById('lore-meaning').textContent = loreText;
+  document.getElementById('result-panel').classList.add('visible');
+
+  showSRSRating();
+  updateGlobalStats();
+
   const sp = document.getElementById('streak-pill');
   if (gStats.streak >= 3) { sp.style.display = 'inline-flex'; document.getElementById('streak-n').textContent = gStats.streak; }
   else sp.style.display = 'none';
