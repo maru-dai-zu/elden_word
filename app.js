@@ -174,14 +174,18 @@ function setMode(m) {
   qState.mode = m;
   ['j2e', 'e2j', 'rd'].forEach(x => document.getElementById('m-' + x).classList.remove('active'));
   document.getElementById('m-' + m).classList.add('active');
-  qState.queue = shuffle([...vocabulary]);
+  const pool = m === 'rd' ? vocabulary.filter(v => /[\u4e00-\u9faf]/.test(v.k)) : vocabulary;
+  qState.queue = shuffle([...pool]);
   qState.rq = 0; qState.rc = 0;
   loadQ();
 }
 
 function loadQ() {
   if (qState.rq >= qState.rt) { showRoundResults(); return; }
-  if (qState.queue.length < 4) qState.queue = shuffle([...vocabulary]);
+  if (qState.queue.length < 4) {
+    const pool = qState.mode === 'rd' ? vocabulary.filter(v => /[\u4e00-\u9faf]/.test(v.k)) : vocabulary;
+    qState.queue = shuffle([...pool]);
+  }
   qState.cur = qState.queue.pop();
   qState.answered = false;
 
