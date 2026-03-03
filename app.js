@@ -222,6 +222,7 @@ function loadQ() {
     document.getElementById('q-read').textContent = '';
     const og = document.getElementById('opts-grid');
     og.innerHTML = '';
+    og.style.cssText = 'display:block;margin-top:18px';
 
     const wrapper = document.createElement('div');
     wrapper.className = 'rd-input-wrap';
@@ -243,6 +244,8 @@ function loadQ() {
 
   } else {
     // 選択肢モード（j2e / e2j）
+    const og2 = document.getElementById('opts-grid');
+    og2.style.cssText = '';
     const wrongs = shuffle(vocabulary.filter(v => v !== word)).slice(0, 3);
     const all = shuffle([word, ...wrongs]);
     qState.opts = all;
@@ -521,8 +524,9 @@ function calNextMonth() {
 }
 
 function renderCalendar() {
+  try {
   const label = document.getElementById('cal-month-label');
-  if (!label) return;
+  if (!label) { console.error('cal-month-label not found'); return; }
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   label.textContent = calYear + '年 · ' + months[calMonth];
 
@@ -575,14 +579,14 @@ function renderCalendar() {
     ].join(';');
 
     const numEl = document.createElement('div');
-    numEl.style.cssText = 'font-family:'Cinzel',serif;font-size:10px;line-height:1;color:' +
+    numEl.style.cssText = 'font-family:\'Cinzel\',serif;font-size:10px;line-height:1;color:' +
       (isSelected ? 'var(--gold)' : isToday ? 'var(--gold-light)' : hasData ? 'var(--parchment)' : 'var(--fog)');
     numEl.textContent = d;
     cell.appendChild(numEl);
 
     if (hasData) {
       const dot = document.createElement('div');
-      dot.style.cssText = 'font-size:7px;font-family:'Cinzel',serif;color:' + (isSelected ? 'var(--gold)' : 'rgba(201,168,76,.55)');
+      dot.style.cssText = 'font-size:7px;font-family:\'Cinzel\',serif;color:' + (isSelected ? 'var(--gold)' : 'rgba(201,168,76,.55)');
       dot.textContent = stats.total + '問';
       cell.appendChild(dot);
 
@@ -609,6 +613,7 @@ function renderCalendar() {
 
     grid.appendChild(cell);
   }
+  } catch(e) { console.error('renderCalendar error:', e); }
 }
 
 function renderDayDetail(key) {
@@ -675,7 +680,7 @@ function renderDayDetail(key) {
   yAxis.style.cssText = 'position:absolute;left:0;top:0;bottom:24px;width:32px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;padding-right:6px';
   [maxVal, Math.round(maxVal / 2), 0].forEach(v => {
     const lbl = document.createElement('div');
-    lbl.style.cssText = 'font-family:'Cinzel',serif;font-size:7px;color:rgba(74,69,64,.7);line-height:1';
+    lbl.style.cssText = 'font-family:\'Cinzel\',serif;font-size:7px;color:rgba(74,69,64,.7);line-height:1';
     lbl.textContent = v;
     yAxis.appendChild(lbl);
   });
@@ -703,14 +708,14 @@ function renderDayDetail(key) {
     ].join(';');
     if (count > 0) {
       const tip = document.createElement('div');
-      tip.style.cssText = 'position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:rgba(13,11,9,.95);border:1px solid rgba(201,168,76,.3);padding:2px 6px;font-family:'Cinzel',serif;font-size:8px;color:var(--gold);white-space:nowrap;opacity:0;transition:opacity .15s;pointer-events:none;z-index:20';
+      tip.style.cssText = 'position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:rgba(13,11,9,.95);border:1px solid rgba(201,168,76,.3);padding:2px 6px;font-family:\'Cinzel\',serif;font-size:8px;color:var(--gold);white-space:nowrap;opacity:0;transition:opacity .15s;pointer-events:none;z-index:20';
       tip.textContent = count;
       bar.appendChild(tip);
       bar.addEventListener('mouseenter', () => tip.style.opacity = '1');
       bar.addEventListener('mouseleave', () => tip.style.opacity = '0');
     }
     const lbl = document.createElement('div');
-    lbl.style.cssText = 'position:absolute;bottom:-20px;font-family:'Cinzel',serif;font-size:7px;color:' + (count > 0 ? 'rgba(201,168,76,.7)' : 'rgba(74,69,64,.4)') + ';white-space:nowrap';
+    lbl.style.cssText = 'position:absolute;bottom:-20px;font-family:\'Cinzel\',serif;font-size:7px;color:' + (count > 0 ? 'rgba(201,168,76,.7)' : 'rgba(74,69,64,.4)') + ';white-space:nowrap';
     lbl.textContent = (hour % 3 === 0) ? hour + 'h' : '';
     col.appendChild(bar);
     col.appendChild(lbl);
