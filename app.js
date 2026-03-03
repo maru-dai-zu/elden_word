@@ -1,4 +1,66 @@
 // ════════════════════════════════════════════════
+// SM-2 SPACED REPETITION
+// ════════════════════════════════════════════════
+const SM2 = {
+  STEPS: [1, 10],
+  GRAD_INTERVAL: 1,
+  EASY_INTERVAL: 4,
+  START_EF: 2.5,
+  MIN_EF: 1.3,
+
+  newCard(idx) {
+    return { idx, interval: 0, ef: SM2.START_EF, due: Date.now(), reps: 0, lapses: 0, state: 'new', step: 0 };
+  },
+
+  review(card, rating) {
+    const now = Date.now();
+    const c = { ...card };
+    if (c.state === 'new' || c.state === 'learning') {
+      if (rating === 0) { c.step = 0; c.due = now + SM2.STEPS[0] * 60000; c.state = 'learning'; }
+      else if (rating === 1) { c.step = Math.max(0, c.step - 1); c.due = now + SM2.STEPS[c.step] * 60000; c.state = 'learning'; }
+      else if (rating === 2) {
+        if (c.step < SM2.STEPS.length - 1) { c.step++; c.due = now + SM2.STEPS[c.step] * 60000; c.state = 'learning'; }
+        else { c.interval = SM2.GRAD_INTERVAL; c.due = now + c.interval * 86400000; c.state = 'review'; }
+      } else { c.interval = SM2.EASY_INTERVAL; c.due = now + c.interval * 86400000; c.state = 'review'; }
+    } else {
+      if (rating === 0) { c.lapses++; c.step = 0; c.due = now + SM2.STEPS[0] * 60000; c.state = 'learning'; c.ef = Math.max(SM2.MIN_EF, c.ef - 0.2); }
+      else {
+        let ni;
+        if (rating === 1) { ni = Math.max(1, Math.round(c.interval * 1.2)); c.ef = Math.max(SM2.MIN_EF, c.ef - 0.15); }
+        else if (rating === 2) { ni = Math.round(c.interval * c.ef); }
+        else { ni = Math.round(c.interval * c.ef * 1.3); c.ef = c.ef + 0.1; }
+        c.interval = Math.max(1, ni);
+        c.due = now + c.interval * 86400000;
+        c.state = c.interval >= 21 ? 'mature' : 'review';
+        c.reps++;
+      }
+    }
+    return c;
+  },
+
+  intervalLabel(card, rating) {
+    const c = { ...card };
+    if (c.state === 'new' || c.state === 'learning') {
+      if (rating === 0) return SM2.STEPS[0] + '分後';
+      if (rating === 1) return SM2.STEPS[Math.max(0, c.step - 1)] + '分後';
+      if (rating === 2) {
+        if (c.step < SM2.STEPS.length - 1) return SM2.STEPS[c.step + 1] + '分後';
+        return SM2.GRAD_INTERVAL + '日後';
+      }
+      return SM2.EASY_INTERVAL + '日後';
+    } else {
+      if (rating === 0) return SM2.STEPS[0] + '分後';
+      const days = [
+        Math.max(1, Math.round(c.interval * 1.2)),
+        Math.max(1, Math.round(c.interval * c.ef)),
+        Math.max(1, Math.round(c.interval * c.ef * 1.3))
+      ][rating - 1];
+      return days >= 30 ? Math.round(days / 30) + 'ヶ月後' : days + '日後';
+    }
+  }
+};
+
+// ════════════════════════════════════════════════
 // STORAGE
 // ════════════════════════════════════════════════
 const Storage = {
@@ -18,6 +80,12 @@ const Storage = {
   },
   setStats(s) {
     try { localStorage.setItem('global-stats', JSON.stringify(s)); } catch {}
+  },
+  getSRSData() {
+    try { return JSON.parse(localStorage.getItem('srs-cards') || '{}'); } catch { return {}; }
+  },
+  setSRSData(d) {
+    try { localStorage.setItem('srs-cards', JSON.stringify(d)); } catch {}
   }
 };
 
@@ -25,6 +93,7 @@ const Storage = {
 // GLOBAL STATE
 // ════════════════════════════════════════════════
 let gStats = { correct: 0, wrong: 0, streak: 0, maxStreak: 0, total: 0 };
+let srsData = {};
 let historyFilter = 'all';
 let historyPage = 0;
 let cachedHistory = [];
@@ -177,6 +246,11 @@ function answerQ(idx) {
   document.getElementById('lore-meaning').textContent = qState.cur.k + ' — ' + qState.cur.m;
   document.getElementById('result-panel').classList.add('visible');
 
+  // SRSインターバルラベルを更新
+  const wordIdx = vocabulary.indexOf(qState.cur);
+  const card = srsData[wordIdx] || SM2.newCard(wordIdx);
+  [0,1,2,3].forEach(r => { document.getElementById('qi-' + r).textContent = SM2.intervalLabel(card, r); });
+
   updateGlobalStats();
   const sp = document.getElementById('streak-pill');
   if (gStats.streak >= 3) { sp.style.display = 'inline-flex'; document.getElementById('streak-n').textContent = gStats.streak; }
@@ -184,6 +258,15 @@ function answerQ(idx) {
 
   Storage.setStats(gStats);
   Storage.addHistory({ k: qState.cur.k, r: qState.cur.r, m: qState.cur.m, result: ok ? 'correct' : 'wrong', mode: qState.mode, ts: Date.now(), type: 'quiz' });
+}
+
+function rateAndNext(rating) {
+  const wordIdx = vocabulary.indexOf(qState.cur);
+  const card = srsData[wordIdx] || SM2.newCard(wordIdx);
+  srsData[wordIdx] = SM2.review(card, rating);
+  Storage.setSRSData(srsData);
+  if (qState.rq >= qState.rt) showRoundResults();
+  else loadQ();
 }
 
 function nextQ() {
@@ -292,7 +375,11 @@ function clearHistory() {
 document.addEventListener('keydown', e => {
   const activePage = document.querySelector('.page.active').id;
   if (activePage === 'page-quiz') {
-    if (qState.answered && e.key === 'Enter') { nextQ(); return; }
+    if (qState.answered) {
+      const m = { '1': 0, '2': 1, '3': 2, '4': 3 };
+      if (m[e.key] !== undefined) { rateAndNext(m[e.key]); return; }
+      if (e.key === 'Enter') { rateAndNext(2); return; } // Enterは「覚えていた」
+    }
     if (!qState.answered) { const m = { '1': 0, '2': 1, '3': 2, '4': 3 }; if (m[e.key] !== undefined) answerQ(m[e.key]); }
   }
 });
@@ -303,6 +390,7 @@ document.addEventListener('keydown', e => {
 function init() {
   createEmbers();
   gStats = Storage.getStats();
+  srsData = Storage.getSRSData();
   updateGlobalStats();
   qState.queue = shuffle([...vocabulary]);
   loadQ();
