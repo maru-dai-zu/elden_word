@@ -129,6 +129,7 @@ function showPage(id) {
   document.getElementById('page-' + id).classList.add('active');
   document.getElementById('tab-' + id).classList.add('active');
   if (id === 'history') renderHistory();
+  if (id === 'chart') renderChart();
 }
 
 // ════════════════════════════════════════════════
@@ -488,6 +489,237 @@ document.addEventListener('keydown', e => {
   }
   if (!qState.answered && numMap[e.key] !== undefined) answerQ(numMap[e.key]);
 });
+
+
+// ════════════════════════════════════════════════
+// CHART / CALENDAR
+// ════════════════════════════════════════════════
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let calSelectedDate = null;
+
+function renderChart() {
+  const today = new Date();
+  const key = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  calSelectedDate = key;
+  calYear = today.getFullYear();
+  calMonth = today.getMonth();
+  renderCalendar();
+  renderDayDetail(key);
+}
+
+function calPrevMonth() {
+  calMonth--;
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function calNextMonth() {
+  calMonth++;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const label = document.getElementById('cal-month-label');
+  if (!label) return;
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  label.textContent = calYear + '年 · ' + months[calMonth];
+
+  const history = Storage.getHistory();
+  const dayStats = {};
+  history.forEach(h => {
+    if (!h || !h.ts) return;
+    const d = new Date(h.ts);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    if (!dayStats[key]) dayStats[key] = { total: 0, correct: 0 };
+    dayStats[key].total++;
+    if (h.result === 'correct') dayStats[key].correct++;
+  });
+
+  const allTotals = Object.values(dayStats).map(d => d.total);
+  const maxDay = allTotals.length > 0 ? Math.max(...allTotals) : 1;
+
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const now = new Date();
+  const todayKey = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+
+  const grid = document.getElementById('cal-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  for (let i = 0; i < firstDay; i++) {
+    const blank = document.createElement('div');
+    blank.style.cssText = 'aspect-ratio:1;min-height:36px';
+    grid.appendChild(blank);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const stats = dayStats[key];
+    const isToday = key === todayKey;
+    const isSelected = key === calSelectedDate;
+    const hasData = stats && stats.total > 0;
+    const intensity = hasData ? Math.max(0.12, stats.total / maxDay) : 0;
+
+    const cell = document.createElement('div');
+    cell.style.cssText = [
+      'aspect-ratio:1', 'min-height:36px',
+      'display:flex', 'flex-direction:column',
+      'align-items:center', 'justify-content:center',
+      'gap:2px', 'cursor:pointer', 'overflow:hidden', 'position:relative',
+      'border:1px solid ' + (isSelected ? 'var(--gold)' : isToday ? 'rgba(201,168,76,.45)' : 'rgba(201,168,76,.1)'),
+      'background:' + (isSelected ? 'rgba(201,168,76,.18)' : hasData ? 'rgba(201,168,76,' + (intensity * 0.16) + ')' : 'rgba(13,11,9,.4)'),
+      'transition:all .15s'
+    ].join(';');
+
+    const numEl = document.createElement('div');
+    numEl.style.cssText = 'font-family:'Cinzel',serif;font-size:10px;line-height:1;color:' +
+      (isSelected ? 'var(--gold)' : isToday ? 'var(--gold-light)' : hasData ? 'var(--parchment)' : 'var(--fog)');
+    numEl.textContent = d;
+    cell.appendChild(numEl);
+
+    if (hasData) {
+      const dot = document.createElement('div');
+      dot.style.cssText = 'font-size:7px;font-family:'Cinzel',serif;color:' + (isSelected ? 'var(--gold)' : 'rgba(201,168,76,.55)');
+      dot.textContent = stats.total + '問';
+      cell.appendChild(dot);
+
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:2px;background:rgba(0,0,0,.3)';
+      const pct = Math.round(stats.correct / stats.total * 100);
+      const fill = document.createElement('div');
+      fill.style.cssText = 'height:100%;width:' + pct + '%;background:' + (pct >= 80 ? 'var(--gold)' : pct >= 50 ? 'var(--ember)' : 'var(--blood)');
+      bar.appendChild(fill);
+      cell.appendChild(bar);
+    }
+
+    cell.addEventListener('click', () => {
+      calSelectedDate = key;
+      renderCalendar();
+      renderDayDetail(key);
+    });
+    cell.addEventListener('mouseenter', () => {
+      if (key !== calSelectedDate) cell.style.borderColor = 'rgba(201,168,76,.5)';
+    });
+    cell.addEventListener('mouseleave', () => {
+      if (key !== calSelectedDate) cell.style.borderColor = isToday ? 'rgba(201,168,76,.45)' : 'rgba(201,168,76,.1)';
+    });
+
+    grid.appendChild(cell);
+  }
+}
+
+function renderDayDetail(key) {
+  const history = Storage.getHistory();
+  const [y, mo, d] = key.split('-').map(Number);
+  const dayStart = new Date(y, mo - 1, d).getTime();
+  const dayEnd = dayStart + 86400000;
+
+  const dayHistory = history.filter(h => h.ts >= dayStart && h.ts < dayEnd);
+  const correct = dayHistory.filter(h => h.result === 'correct').length;
+  const wrong = dayHistory.filter(h => h.result === 'wrong').length;
+  const total = dayHistory.length;
+
+  document.getElementById('day-placeholder').style.display = 'none';
+  document.getElementById('day-detail').style.display = 'block';
+
+  const dateLabel = new Date(y, mo - 1, d).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  document.getElementById('detail-date-label').textContent = dateLabel;
+  document.getElementById('chart-summary').textContent = total > 0
+    ? total + '問 学習済み · 正解 ' + correct + ' · 不正解 ' + wrong
+    : 'この日の学習記録はありません';
+
+  document.getElementById('today-correct').textContent = correct;
+  document.getElementById('today-wrong').textContent = wrong;
+  document.getElementById('today-total').textContent = total;
+
+  const circ = 289.03;
+  const dc = document.getElementById('donut-correct');
+  const dw = document.getElementById('donut-wrong');
+  if (total > 0) {
+    const pct = Math.round(correct / total * 100);
+    document.getElementById('donut-pct').textContent = pct + '%';
+    const ca = (correct / total) * circ;
+    const wa = (wrong / total) * circ;
+    dc.style.strokeDashoffset = circ - ca;
+    dc.style.strokeDasharray = ca + ' ' + (circ - ca);
+    dw.style.strokeDashoffset = -ca;
+    dw.style.strokeDasharray = wa + ' ' + (circ - wa);
+  } else {
+    document.getElementById('donut-pct').textContent = '—';
+    dc.style.strokeDashoffset = circ; dc.style.strokeDasharray = '289.03';
+    dw.style.strokeDashoffset = circ; dw.style.strokeDasharray = '289.03';
+  }
+
+  const hourly = Array(24).fill(0);
+  dayHistory.forEach(h => { hourly[new Date(h.ts).getHours()]++; });
+
+  const container = document.getElementById('hourly-chart');
+  const emptyEl = document.getElementById('chart-empty');
+  container.innerHTML = '';
+
+  if (total === 0) {
+    container.style.display = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  container.style.display = 'flex';
+  emptyEl.style.display = 'none';
+
+  const maxVal = Math.max(...hourly, 1);
+  const chartH = 156;
+
+  const yAxis = document.createElement('div');
+  yAxis.style.cssText = 'position:absolute;left:0;top:0;bottom:24px;width:32px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;padding-right:6px';
+  [maxVal, Math.round(maxVal / 2), 0].forEach(v => {
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-family:'Cinzel',serif;font-size:7px;color:rgba(74,69,64,.7);line-height:1';
+    lbl.textContent = v;
+    yAxis.appendChild(lbl);
+  });
+  container.appendChild(yAxis);
+
+  const barsWrap = document.createElement('div');
+  barsWrap.style.cssText = 'flex:1;display:flex;align-items:flex-end;gap:2px;height:' + (chartH + 24) + 'px;padding-bottom:24px;position:relative';
+  [1, 0.5].forEach(frac => {
+    const gl = document.createElement('div');
+    gl.style.cssText = 'position:absolute;left:0;right:0;height:1px;background:rgba(201,168,76,.07);bottom:' + (frac * chartH + 24) + 'px;pointer-events:none';
+    barsWrap.appendChild(gl);
+  });
+
+  hourly.forEach((count, hour) => {
+    const col = document.createElement('div');
+    col.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative';
+    const barH = count > 0 ? Math.max(4, Math.round((count / maxVal) * chartH)) : 2;
+    const bar = document.createElement('div');
+    bar.style.cssText = [
+      'width:100%', 'height:0',
+      'transition:height .55s ease ' + (hour * 16) + 'ms',
+      'background:' + (count > 0 ? 'linear-gradient(to top,var(--gold-dark),var(--gold))' : 'rgba(201,168,76,.06)'),
+      'border-top:1px solid ' + (count > 0 ? 'var(--gold)' : 'rgba(201,168,76,.1)'),
+      'position:relative'
+    ].join(';');
+    if (count > 0) {
+      const tip = document.createElement('div');
+      tip.style.cssText = 'position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:rgba(13,11,9,.95);border:1px solid rgba(201,168,76,.3);padding:2px 6px;font-family:'Cinzel',serif;font-size:8px;color:var(--gold);white-space:nowrap;opacity:0;transition:opacity .15s;pointer-events:none;z-index:20';
+      tip.textContent = count;
+      bar.appendChild(tip);
+      bar.addEventListener('mouseenter', () => tip.style.opacity = '1');
+      bar.addEventListener('mouseleave', () => tip.style.opacity = '0');
+    }
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'position:absolute;bottom:-20px;font-family:'Cinzel',serif;font-size:7px;color:' + (count > 0 ? 'rgba(201,168,76,.7)' : 'rgba(74,69,64,.4)') + ';white-space:nowrap';
+    lbl.textContent = (hour % 3 === 0) ? hour + 'h' : '';
+    col.appendChild(bar);
+    col.appendChild(lbl);
+    barsWrap.appendChild(col);
+    requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.height = barH + 'px'; }));
+  });
+
+  container.appendChild(barsWrap);
+}
 
 // ════════════════════════════════════════════════
 // INIT
