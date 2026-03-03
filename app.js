@@ -9,24 +9,24 @@ const SM2 = {
   MIN_EF: 1.3,
 
   newCard(idx) {
-    return { idx, interval: 0, ef: SM2.START_EF, due: Date.now(), reps: 0, lapses: 0, state: 'new', step: 0 };
+    return { idx, interval: 0, ef: this.START_EF, due: 0, reps: 0, lapses: 0, state: 'new', step: 0 };
   },
 
   review(card, rating) {
     const now = Date.now();
     const c = { ...card };
     if (c.state === 'new' || c.state === 'learning') {
-      if (rating === 0) { c.step = 0; c.due = now + SM2.STEPS[0] * 60000; c.state = 'learning'; }
-      else if (rating === 1) { c.step = Math.max(0, c.step - 1); c.due = now + SM2.STEPS[c.step] * 60000; c.state = 'learning'; }
+      if (rating === 0) { c.step = 0; c.due = now + this.STEPS[0] * 60000; c.state = 'learning'; }
+      else if (rating === 1) { c.step = Math.max(0, c.step - 1); c.due = now + this.STEPS[c.step] * 60000; c.state = 'learning'; }
       else if (rating === 2) {
-        if (c.step < SM2.STEPS.length - 1) { c.step++; c.due = now + SM2.STEPS[c.step] * 60000; c.state = 'learning'; }
-        else { c.interval = SM2.GRAD_INTERVAL; c.due = now + c.interval * 86400000; c.state = 'review'; }
-      } else { c.interval = SM2.EASY_INTERVAL; c.due = now + c.interval * 86400000; c.state = 'review'; }
+        if (c.step < this.STEPS.length - 1) { c.step++; c.due = now + this.STEPS[c.step] * 60000; c.state = 'learning'; }
+        else { c.interval = this.GRAD_INTERVAL; c.due = now + c.interval * 86400000; c.state = 'review'; }
+      } else { c.interval = this.EASY_INTERVAL; c.due = now + c.interval * 86400000; c.state = 'review'; }
     } else {
-      if (rating === 0) { c.lapses++; c.step = 0; c.due = now + SM2.STEPS[0] * 60000; c.state = 'learning'; c.ef = Math.max(SM2.MIN_EF, c.ef - 0.2); }
+      if (rating === 0) { c.lapses++; c.step = 0; c.due = now + this.STEPS[0] * 60000; c.state = 'learning'; c.ef = Math.max(this.MIN_EF, c.ef - 0.2); }
       else {
         let ni;
-        if (rating === 1) { ni = Math.max(1, Math.round(c.interval * 1.2)); c.ef = Math.max(SM2.MIN_EF, c.ef - 0.15); }
+        if (rating === 1) { ni = Math.max(1, Math.round(c.interval * 1.2)); c.ef = Math.max(this.MIN_EF, c.ef - 0.15); }
         else if (rating === 2) { ni = Math.round(c.interval * c.ef); }
         else { ni = Math.round(c.interval * c.ef * 1.3); c.ef = c.ef + 0.1; }
         c.interval = Math.max(1, ni);
@@ -41,21 +41,22 @@ const SM2 = {
   intervalLabel(card, rating) {
     const c = { ...card };
     if (c.state === 'new' || c.state === 'learning') {
-      if (rating === 0) return SM2.STEPS[0] + '分後';
-      if (rating === 1) return SM2.STEPS[Math.max(0, c.step - 1)] + '分後';
+      if (rating === 0) return this.STEPS[0] + '分後';
+      if (rating === 1) return this.STEPS[Math.max(0, c.step - 1)] + '分後';
       if (rating === 2) {
-        if (c.step < SM2.STEPS.length - 1) return SM2.STEPS[c.step + 1] + '分後';
-        return SM2.GRAD_INTERVAL + '日後';
+        if (c.step < this.STEPS.length - 1) return this.STEPS[c.step + 1] + '分後';
+        return this.GRAD_INTERVAL + '日後';
       }
-      return SM2.EASY_INTERVAL + '日後';
+      return this.EASY_INTERVAL + '日後';
     } else {
-      if (rating === 0) return SM2.STEPS[0] + '分後';
-      const days = [
+      if (rating === 0) return this.STEPS[0] + '分後';
+      const intervals = [
         Math.max(1, Math.round(c.interval * 1.2)),
         Math.max(1, Math.round(c.interval * c.ef)),
         Math.max(1, Math.round(c.interval * c.ef * 1.3))
-      ][rating - 1];
-      return days >= 30 ? Math.round(days / 30) + 'ヶ月後' : days + '日後';
+      ];
+      const d = intervals[rating - 1];
+      return d >= 30 ? Math.round(d / 30) + 'ヶ月後' : d + '日後';
     }
   }
 };
@@ -84,8 +85,8 @@ const Storage = {
   getSRSData() {
     try { return JSON.parse(localStorage.getItem('srs-cards') || '{}'); } catch { return {}; }
   },
-  setSRSData(d) {
-    try { localStorage.setItem('srs-cards', JSON.stringify(d)); } catch {}
+  setSRSData(data) {
+    try { localStorage.setItem('srs-cards', JSON.stringify(data)); } catch {}
   }
 };
 
@@ -159,6 +160,14 @@ function updateGlobalStats() {
   document.getElementById('s-accbar').style.width = acc + '%';
   document.getElementById('s-streak').textContent = gStats.streak;
   document.getElementById('s-total').textContent = gStats.total;
+  updateDueBadge();
+}
+
+function updateDueBadge() {
+  const due = Object.values(srsData).filter(c => c.due <= Date.now()).length;
+  const badge = document.getElementById('due-badge');
+  if (due > 0) { badge.style.display = 'inline-block'; badge.textContent = due; }
+  else badge.style.display = 'none';
 }
 
 // ════════════════════════════════════════════════
@@ -176,32 +185,47 @@ function setMode(m) {
 
 function loadQ() {
   if (qState.rq >= qState.rt) { showRoundResults(); return; }
-  if (qState.queue.length < 4) {
-    const pool = qState.mode === 'rd' ? vocabulary.filter(v => /[\u4e00-\u9faf]/.test(v.k)) : vocabulary;
-    qState.queue = shuffle([...pool]);
+
+  const pool = qState.mode === 'rd' ? vocabulary.filter(v => /[\u4e00-\u9faf]/.test(v.k)) : vocabulary;
+
+  // 復習期限カードを優先
+  const dueCards = shuffle(Object.values(srsData).filter(c => c.due <= Date.now()));
+  let word;
+
+  if (dueCards.length > 0) {
+    const card = dueCards[0];
+    word = vocabulary[card.idx];
+    if (!word) { delete srsData[card.idx]; loadQ(); return; }
+    qState.cur = word;
+    qState._dueCard = card;
+    document.getElementById('q-badge').innerHTML =
+      '<span style="color:#e07070;font-family:Cinzel,serif;font-size:8px;letter-spacing:2px">&#9672; 復習 ' + dueCards.length + '件</span>';
+  } else {
+    qState._dueCard = null;
+    if (qState.queue.length < 4) qState.queue = shuffle([...pool]);
+    word = qState.cur = qState.queue.pop();
+    const m = qState.mode;
+    if (m === 'j2e') document.getElementById('q-badge').textContent = 'JP \u2192 EN \xb7 \u610f\u5473\u3092\u7b54\u3048\u3088';
+    else if (m === 'e2j') document.getElementById('q-badge').textContent = 'EN \u2192 JP \xb7 \u8a00\u8449\u3092\u7b54\u3048\u3088';
+    else document.getElementById('q-badge').textContent = 'READING \xb7 \u8aad\u307f\u65b9\u3092\u7b54\u3048\u3088';
   }
-  qState.cur = qState.queue.pop();
+
   qState.answered = false;
 
-  const wrongs = shuffle(vocabulary.filter(v => v !== qState.cur)).slice(0, 3);
-  const all = shuffle([qState.cur, ...wrongs]);
+  const wrongs = shuffle(vocabulary.filter(v => v !== word)).slice(0, 3);
+  const all = shuffle([word, ...wrongs]);
   qState.opts = all;
-  qState.ci = all.indexOf(qState.cur);
+  qState.ci = all.indexOf(word);
 
   const m = qState.mode;
   document.getElementById('q-num').textContent = '# ' + String(gStats.total + 1).padStart(4, '0');
-  if (m === 'j2e') {
-    document.getElementById('q-word').textContent = qState.cur.k;
-    document.getElementById('q-read').textContent = qState.cur.r !== qState.cur.k ? qState.cur.r : '';
-    document.getElementById('q-badge').textContent = 'JP → EN · 意味を答えよ';
-  } else if (m === 'e2j') {
-    document.getElementById('q-word').textContent = qState.cur.m;
-    document.getElementById('q-read').textContent = '';
-    document.getElementById('q-badge').textContent = 'EN → JP · 言葉を答えよ';
+
+  if (m === 'j2e' || m === 'rd' || qState._dueCard) {
+    document.getElementById('q-word').textContent = word.k;
+    document.getElementById('q-read').textContent = word.r !== word.k ? word.r : '';
   } else {
-    document.getElementById('q-word').textContent = qState.cur.k;
+    document.getElementById('q-word').textContent = word.m;
     document.getElementById('q-read').textContent = '';
-    document.getElementById('q-badge').textContent = 'READING · 読み方を答えよ';
   }
 
   const og = document.getElementById('opts-grid');
@@ -209,13 +233,15 @@ function loadQ() {
   all.forEach((opt, i) => {
     const btn = document.createElement('button');
     btn.className = 'opt';
-    btn.setAttribute('data-n', ['Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ'][i]);
-    btn.textContent = m === 'j2e' ? opt.m : m === 'e2j' ? opt.k + (opt.k !== opt.r ? '\n' + opt.r : '') : opt.r;
+    btn.setAttribute('data-n', ['\u2160', '\u2161', '\u2162', '\u2163'][i]);
+    btn.textContent = (m === 'j2e' || qState._dueCard) ? opt.m :
+      m === 'e2j' ? opt.k + (opt.k !== opt.r ? '\n' + opt.r : '') : opt.r;
     btn.onclick = () => answerQ(i);
     og.appendChild(btn);
   });
 
   document.getElementById('result-panel').classList.remove('visible');
+  document.getElementById('srs-rate-area').style.display = 'none';
   document.getElementById('quiz-card').style.display = 'block';
   document.getElementById('results-card').style.display = 'none';
   updateQProg();
@@ -238,18 +264,15 @@ function answerQ(idx) {
   if (gStats.streak > gStats.maxStreak) gStats.maxStreak = gStats.streak;
 
   const j = document.getElementById('judgment');
-  const ok_msgs = ['RUNE OBTAINED', 'GRACE FOUND', '知識を得た', 'KNOWLEDGE GAINED', 'ERDTREE BLESSES'];
-  const ng_msgs = ['YOU DIED', '語彙なき者', 'GRACE LOST', 'FELLED', 'MAIDENLESS'];
+  const ok_msgs = ['RUNE OBTAINED', 'GRACE FOUND', '\u77e5\u8b58\u3092\u5f97\u305f', 'KNOWLEDGE GAINED', 'ERDTREE BLESSES'];
+  const ng_msgs = ['YOU DIED', '\u8a9e\u5f59\u306a\u304d\u8005', 'GRACE LOST', 'FELLED', 'MAIDENLESS'];
   j.textContent = ok ? ok_msgs[Math.floor(Math.random() * ok_msgs.length)] : ng_msgs[Math.floor(Math.random() * ng_msgs.length)];
   j.className = 'judgment ' + (ok ? 'cj' : 'wj');
 
-  document.getElementById('lore-meaning').textContent = qState.cur.k + ' — ' + qState.cur.m;
+  document.getElementById('lore-meaning').textContent = qState.cur.k + ' \u2014 ' + qState.cur.m;
   document.getElementById('result-panel').classList.add('visible');
 
-  // SRSインターバルラベルを更新
-  const wordIdx = vocabulary.indexOf(qState.cur);
-  const card = srsData[wordIdx] || SM2.newCard(wordIdx);
-  [0,1,2,3].forEach(r => { document.getElementById('qi-' + r).textContent = SM2.intervalLabel(card, r); });
+  showSRSRating();
 
   updateGlobalStats();
   const sp = document.getElementById('streak-pill');
@@ -260,13 +283,26 @@ function answerQ(idx) {
   Storage.addHistory({ k: qState.cur.k, r: qState.cur.r, m: qState.cur.m, result: ok ? 'correct' : 'wrong', mode: qState.mode, ts: Date.now(), type: 'quiz' });
 }
 
-function rateAndNext(rating) {
-  const wordIdx = vocabulary.indexOf(qState.cur);
-  const card = srsData[wordIdx] || SM2.newCard(wordIdx);
-  srsData[wordIdx] = SM2.review(card, rating);
+// ════════════════════════════════════════════════
+// SRS RATING
+// ════════════════════════════════════════════════
+function showSRSRating() {
+  document.getElementById('srs-rate-area').style.display = 'block';
+  const idx = vocabulary.indexOf(qState.cur);
+  const card = srsData[idx] || SM2.newCard(idx);
+  [0, 1, 2, 3].forEach(r => {
+    document.getElementById('sq-int-' + r).textContent = SM2.intervalLabel(card, r);
+  });
+}
+
+function rateSRS(rating) {
+  const idx = vocabulary.indexOf(qState.cur);
+  const card = srsData[idx] || SM2.newCard(idx);
+  srsData[idx] = SM2.review(card, rating);
   Storage.setSRSData(srsData);
-  if (qState.rq >= qState.rt) showRoundResults();
-  else loadQ();
+  document.getElementById('srs-rate-area').style.display = 'none';
+  updateDueBadge();
+  nextQ();
 }
 
 function nextQ() {
@@ -278,7 +314,7 @@ function showRoundResults() {
   document.getElementById('quiz-card').style.display = 'none';
   document.getElementById('results-card').style.display = 'block';
   const pct = Math.round(qState.rc / qState.rt * 100);
-  const tiers = [[100,'ELDEN LORD','完璧なる知識。エルデンリングは汝を認めた。'],[80,'CHAMPION','偉大なる褪せ人よ。語彙の黄金樹が輝く。'],[60,'TARNISHED','まだ道は続く。再び語彙の試練に挑め。'],[40,'FELLED','語彙なき者よ。もっと修行が必要だ。'],[0,'YOU DIED','黄金律に背きし者。最初から始めよ。']];
+  const tiers = [[100,'ELDEN LORD','\u5b8c\u74a7\u306a\u308b\u77e5\u8b58\u3002\u30a8\u30eb\u30c7\u30f3\u30ea\u30f3\u30b0\u306f\u6c5d\u3092\u8a8d\u3081\u305f\u3002'],[80,'CHAMPION','\u5049\u5927\u306a\u308b\u892a\u305b\u4eba\u3088\u3002\u8a9e\u5f59\u306e\u9ec4\u91d1\u6a39\u304c\u8f1d\u304f\u3002'],[60,'TARNISHED','\u307e\u3060\u9053\u306f\u7d9a\u304f\u3002\u518d\u3073\u8a9e\u5f59\u306e\u8a66\u7df4\u306b\u6311\u3081\u3002'],[40,'FELLED','\u8a9e\u5f59\u306a\u304d\u8005\u3088\u3002\u3082\u3063\u3068\u4fee\u884c\u304c\u5fc5\u8981\u3060\u3002'],[0,'YOU DIED','\u9ec4\u91d1\u5f8b\u306b\u80cc\u304d\u3057\u8005\u3002\u6700\u521d\u304b\u3089\u59cb\u3081\u3088\u3002']];
   const [, title, msg] = tiers.find(([t]) => pct >= t);
   document.getElementById('r-title').textContent = title;
   document.getElementById('r-score').textContent = qState.rc + '/' + qState.rt;
@@ -296,7 +332,7 @@ function updateQProg() {
   const c = 138.2;
   document.getElementById('prog-ring').style.strokeDashoffset = c - p * c;
   document.getElementById('prog-count').textContent = qState.rq + '/' + qState.rt;
-  document.getElementById('prog-label').textContent = '語彙の試練 · 残り ' + (qState.rt - qState.rq) + '問';
+  document.getElementById('prog-label').textContent = '\u8a9e\u5f59\u306e\u8a66\u7df4 \xb7 \u6b8b\u308a ' + (qState.rt - qState.rq) + '\u554f';
 }
 
 // ════════════════════════════════════════════════
@@ -321,7 +357,6 @@ function renderHistoryPage() {
   let data = cachedHistory;
   if (historyFilter === 'correct') data = data.filter(h => h.result === 'correct');
   else if (historyFilter === 'wrong') data = data.filter(h => h.result === 'wrong');
-  else if (historyFilter === 'srs') data = data.filter(h => h.type === 'srs');
 
   const total = data.length;
   const pages = Math.max(1, Math.ceil(total / HIST_PER_PAGE));
@@ -330,7 +365,7 @@ function renderHistoryPage() {
 
   const correct = cachedHistory.filter(h => h.result === 'correct').length;
   const wrong = cachedHistory.filter(h => h.result === 'wrong').length;
-  document.getElementById('hist-summary').textContent = `総計 ${cachedHistory.length}問 · 正解 ${correct} · 不正解 ${wrong}`;
+  document.getElementById('hist-summary').textContent = '\u7dcf\u8a08 ' + cachedHistory.length + '\u554f \xb7 \u6b63\u89e3 ' + correct + ' \xb7 \u4e0d\u6b63\u89e3 ' + wrong;
 
   const tbody = document.getElementById('hist-tbody');
   tbody.innerHTML = '';
@@ -341,15 +376,14 @@ function renderHistoryPage() {
     document.getElementById('hist-pagination').style.display = 'none';
   } else {
     empty.style.display = 'none';
-    const modeLabel = { j2e: '日→英', e2j: '英→日', rd: '読み', srs: '◈ SRS' };
-    const ratingLabel = ['また忘れた', '難しかった', '覚えていた', '簡単だった'];
+    const modeLabel = { j2e: '\u65e5\u2192\u82f1', e2j: '\u82f1\u2192\u65e5', rd: '\u8aad\u307f' };
     slice.forEach(h => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><div class="hist-word">${h.k}</div><div class="hist-read">${h.r !== h.k ? h.r : ''}</div><div class="hist-meaning">${h.m}</div></td>
-        <td><span class="${h.result === 'correct' ? 'tag-correct' : 'tag-wrong'}">${h.result === 'correct' ? '✓ 正解' : '✗ 不正解'}</span>${h.rating !== undefined ? `<div style="font-size:9px;color:var(--fog);margin-top:3px;font-family:'Cinzel',serif;letter-spacing:1px">${ratingLabel[h.rating]}</div>` : ''}</td>
-        <td><div class="hist-mode">${modeLabel[h.mode] || h.mode}</div></td>
-        <td><div class="hist-time">${fmtTime(h.ts)}</div></td>`;
+      tr.innerHTML =
+        '<td><div class="hist-word">' + h.k + '</div><div class="hist-read">' + (h.r !== h.k ? h.r : '') + '</div><div class="hist-meaning">' + h.m + '</div></td>' +
+        '<td><span class="' + (h.result === 'correct' ? 'tag-correct' : 'tag-wrong') + '">' + (h.result === 'correct' ? '\u2713 \u6b63\u89e3' : '\u2717 \u4e0d\u6b63\u89e3') + '</span></td>' +
+        '<td><div class="hist-mode">' + (modeLabel[h.mode] || h.mode) + '</div></td>' +
+        '<td><div class="hist-time">' + fmtTime(h.ts) + '</div></td>';
       tbody.appendChild(tr);
     });
     const pag = document.getElementById('hist-pagination');
@@ -363,7 +397,7 @@ function renderHistoryPage() {
 }
 
 function clearHistory() {
-  if (!confirm('履歴を全て削除しますか？')) return;
+  if (!confirm('\u5c65\u6b74\u3092\u5168\u3066\u524a\u9664\u3057\u307e\u3059\u304b\uff1f')) return;
   try { localStorage.removeItem('quiz-history'); } catch {}
   cachedHistory = [];
   renderHistoryPage();
@@ -374,14 +408,16 @@ function clearHistory() {
 // ════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
   const activePage = document.querySelector('.page.active').id;
-  if (activePage === 'page-quiz') {
-    if (qState.answered) {
-      const m = { '1': 0, '2': 1, '3': 2, '4': 3 };
-      if (m[e.key] !== undefined) { rateAndNext(m[e.key]); return; }
-      if (e.key === 'Enter') { rateAndNext(2); return; } // Enterは「覚えていた」
-    }
-    if (!qState.answered) { const m = { '1': 0, '2': 1, '3': 2, '4': 3 }; if (m[e.key] !== undefined) answerQ(m[e.key]); }
+  if (activePage !== 'page-quiz') return;
+  const rateArea = document.getElementById('srs-rate-area');
+  const numMap = { '1': 0, '2': 1, '3': 2, '4': 3 };
+
+  if (qState.answered) {
+    if (rateArea.style.display !== 'none') {
+      if (numMap[e.key] !== undefined) { rateSRS(numMap[e.key]); return; }
+    } else if (e.key === 'Enter') { nextQ(); return; }
   }
+  if (!qState.answered && numMap[e.key] !== undefined) answerQ(numMap[e.key]);
 });
 
 // ════════════════════════════════════════════════
