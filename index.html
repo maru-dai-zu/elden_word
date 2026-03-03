@@ -20,12 +20,11 @@
 <header>
   <div class="h-rune">The Tarnished's Lexicon · SRS Edition</div>
   <div class="h-title">褪せ人の語彙録</div>
-  <div class="h-sub">JLPT N2 · 1829語 · 忘却曲線学習</div>
+  <div class="h-sub">JLPT N2 · 1829語</div>
 </header>
 
 <nav class="nav">
   <button class="nav-btn active" onclick="showPage('quiz')" id="tab-quiz">⚔ 試練</button>
-  <button class="nav-btn" onclick="showPage('srs')" id="tab-srs">◈ 記憶修練 <span class="nav-badge" id="due-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showPage('history')" id="tab-history">📜 履歴</button>
 </nav>
 
@@ -34,7 +33,6 @@
   <div class="stat"><span class="stat-label">霊力</span><div class="acc-bar"><div class="acc-fill" id="s-accbar" style="width:0%"></div></div><span class="stat-value" id="s-acc">-</span></div>
   <div class="stat"><span class="stat-label">連鎖</span><span class="stat-value" id="s-streak" style="color:var(--ember)">0</span></div>
   <div class="stat"><span class="stat-label">総問数</span><span class="stat-value" id="s-total">0</span></div>
-  <div class="stat"><span class="stat-label">修練済</span><span class="stat-value" id="s-learned" style="color:#6a8fa8">0</span></div>
 </div>
 
 <!-- ═══ QUIZ PAGE ═══ -->
@@ -71,7 +69,6 @@
       <div class="lore-box">
         <div class="lore-hdr">✦ Item Description</div>
         <div class="meaning-main" id="lore-meaning"></div>
-        <div class="lore-text" id="lore-text"><div class="generating"><div class="gd"></div><div class="gd"></div><div class="gd"></div><span>古の語録を紐解いている…</span></div></div>
       </div>
       <button class="btn-next" onclick="nextQ()"><span>次の試練へ ◈</span></button>
     </div>
@@ -82,66 +79,12 @@
       <div class="r-title" id="r-title">試練完了</div>
       <div class="r-score" id="r-score">0/10</div>
       <div class="r-msg" id="r-msg"></div>
-      <div class="lore-box" id="r-lore" style="text-align:left;margin-top:12px;display:none">
-        <div class="lore-hdr">✦ The Elden Ring Speaks</div>
-        <div class="lore-text" id="r-lore-text"></div>
-      </div>
       <button class="btn-retry" onclick="newRound()">再び挑む</button>
     </div>
   </div>
 </div>
 </div>
 
-<!-- ═══ SRS PAGE ═══ -->
-<div class="page" id="page-srs">
-<div class="container">
-  <div class="srs-dash">
-    <div class="srs-stat-card"><div class="srs-stat-val due-now" id="srs-due">0</div><div class="srs-stat-lbl">今日の復習</div></div>
-    <div class="srs-stat-card"><div class="srs-stat-val" id="srs-new" style="color:#6a8fa8">0</div><div class="srs-stat-lbl">新規学習可能</div></div>
-    <div class="srs-stat-card"><div class="srs-stat-val" id="srs-learned">0</div><div class="srs-stat-lbl">習得済み語彙</div></div>
-    <div class="srs-stat-card"><div class="srs-stat-val" id="srs-mature" style="color:#8fd98f">0</div><div class="srs-stat-lbl">定着済み</div></div>
-  </div>
-  <div id="srs-study-area">
-    <div class="queue-bar" id="srs-queue-bar"></div>
-    <div class="card" id="srs-card">
-      <div class="word-num" id="srs-num"># 0001</div>
-      <div class="word-meta" id="srs-badge">記憶修練 · REVIEW</div>
-      <div class="word-main" id="srs-word">—</div>
-      <div class="word-read" id="srs-read">—</div>
-      <div class="divider"></div>
-      <div id="srs-reveal-area">
-        <div class="reveal-hint" id="reveal-btn" onclick="revealAnswer()">── タップして答えを確認 ──</div>
-      </div>
-      <div id="srs-answer-area" style="display:none">
-        <div class="lore-box">
-          <div class="lore-hdr">✦ 意味 · Meaning</div>
-          <div class="meaning-main" id="srs-meaning">—</div>
-          <div class="lore-text" id="srs-lore-text"><div class="generating"><div class="gd"></div><div class="gd"></div><div class="gd"></div><span>古の語録を紐解いている…</span></div></div>
-        </div>
-        <div class="sep">難易度を選べ</div>
-        <div class="srs-rating">
-          <button class="srs-btn again" onclick="rateSRS(0)"><span class="srs-label">また忘れた</span><span class="srs-interval" id="int-0">1分後</span></button>
-          <button class="srs-btn hard" onclick="rateSRS(1)"><span class="srs-label">難しかった</span><span class="srs-interval" id="int-1">10分後</span></button>
-          <button class="srs-btn good" onclick="rateSRS(2)"><span class="srs-label">覚えていた</span><span class="srs-interval" id="int-2">1日後</span></button>
-          <button class="srs-btn easy" onclick="rateSRS(3)"><span class="srs-label">簡単だった</span><span class="srs-interval" id="int-3">4日後</span></button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="card" id="srs-complete" style="display:none">
-    <div class="results-screen">
-      <div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:4px;color:var(--fog);margin-bottom:6px">SESSION COMPLETE</div>
-      <div class="r-title">修練完了</div>
-      <div style="font-size:13px;color:var(--fog);margin:12px 0" id="srs-done-msg">本日の修練は終わった</div>
-      <div class="lore-box" style="text-align:left;margin-top:12px">
-        <div class="lore-hdr">✦ 次の復習</div>
-        <div class="lore-text" id="srs-next-review">次の復習カードは明日訪れる。</div>
-      </div>
-      <button class="btn-retry" onclick="startSRSSession()">さらに学ぶ</button>
-    </div>
-  </div>
-</div>
-</div>
 
 <!-- ═══ HISTORY PAGE ═══ -->
 <div class="page" id="page-history">
@@ -159,7 +102,6 @@
     <button class="hist-filter active" onclick="setHistFilter('all')" id="hf-all">すべて</button>
     <button class="hist-filter" onclick="setHistFilter('correct')" id="hf-correct">✓ 正解</button>
     <button class="hist-filter" onclick="setHistFilter('wrong')" id="hf-wrong">✗ 不正解</button>
-    <button class="hist-filter" onclick="setHistFilter('srs')" id="hf-srs">◈ SRS</button>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
     <table class="hist-table">
